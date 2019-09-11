@@ -3,6 +3,7 @@ use warnings;
 
 use Cwd 'getcwd';
 use File::Find;
+use Data::Dumper;
 
 my $cwd = getcwd;
 #print $cwd, "\n";
@@ -92,8 +93,16 @@ sub read_mode {
 }
 
 sub validate_extension {
-  my $line = $_[0];
+  my $ext = $_[0];
 
+  if ( $ext =~ m|^(\.)([\w.\-]+)$| ) {
+    return (1, $ext);
+  }
+  elsif ( $ext =~ m|^([\w.\-]+)$| ) {
+    return (1, "." . $ext);
+  }
+  
+  return (0, "");
 }
 
 sub validate_filename {
@@ -104,15 +113,15 @@ sub validate_filename {
   my @lines;
 
   # 置換した結果を格納しておくバッファ
-  my %replaced = ();
+  my %replaced;
 
   # extension: と env_vars: に相当するインデント
   # 各ファイルの単位でこのインデントのルールが崩れるとエラー。
-  my $fst_indent = 0;
+  my $fst_indent;
 
   # 「環境変数：値」の行に相当するインデント
   # 各ファイルの単位でこのインデントのルールが崩れるとエラー。
-  my $snd_indent = 0;
+  my $snd_indent;
 
   sub check_fst_indent {
     my $indent = $_[0];
@@ -168,25 +177,34 @@ sub validate_filename {
 
   # filename を読んだ時点で 1 。これが 1 のときに EOF か次の filename を読むと次のファイル。
   # これが 0 のときに is_read_extension か is_read_env_vars が 1 になるとエラー。
-  my $is_read_filename = 0;
+  my $is_read_filename;
   # 今読んでいるファイルの名前
   my $cur_filename;
   # 今読んでいるファイルの設定
-  my %cur_store = ();
+  my %cur_store;
+  # 今読んでいるファイルの環境変数
+  my %cur_env_vars;
 
   # extension: を読んだ時点で 1 。これが 1 のときに「環境変数: 値」の行を読むとエラー。
   # これが 1 のときに次の filename が来るのは別にOK。
   # 次の filename か env_vars: が来ると 0 になる。
-  my $is_read_extension = 0;
+  my $is_read_extension;
 
   # env_vars: を読んだ時点で 1 。これが 1 のときのみ「環境変数：値」の行を読んでいい。
   # 次の filename か extension: が来ると 0 になる。 
-  my $is_read_env_vars = 0;  
+  my $is_read_env_vars;  
 
   sub parse_breath_yml {
+    %replaced = ();
+
     $is_read_filename = 0;
+    $is_read_extension = 0;
+    $is_read_env_vars = 0;
     $fst_indent = 0;
     $snd_indent = 0;
+
+    %cur_store = ();
+    %cur_env_vars = ();
 
     my $idx = 1;
     foreach my $line (@lines) {
@@ -220,36 +238,74 @@ sub validate_filename {
     my $finalize = $_[2];
 
     if ( $finalize ) {
-      $replaced{$cur_filename} = %cur_store;
+      my %env_vars_buf = %cur_env_vars;
+      $cur_store{"env_vars"} = \%env_vars_buf;
+      my %store_buf = %cur_store;
+      $replaced{$cur_filename} = \%store_buf;
       return;
     }
 
     #print $line;
-    if ( $line =~ m|^(\s*)(\w+)(\s*)(:)(\s*)([\w/.]+)(\s*)(\R)$| ) {
+    if ( $line =~ m|^(\s*)(\w+)(\s*)(:)(\s*)([\w:/.]+)(\s*)(\R)$| ) {
       # パターン 1
       # 拡張子または環境変数
-      print "case 1 ", $line;
 
       my $indent = length $1;
-      if ( $indent > 0 ) {
-          #print "indent!!\n";
-          #print $indent;
-      }
-      #print "    indent = $1   key = $2\n";
 
       if ( $2 eq "extension" ) {
-        print "!!Extension\n";
+        if ( $is_read_extension ) {
+          printf "Invalid syntax in line %d: 'extension:' detected twice in one file.\n", $idx;
+          print "$line\n";
+        }
+
+        if ( ! &check_fst_indent($indent) ) {
+          printf "Indent error in line %d.\n", $idx;
+          print "$line\n";
+        }
+
+        my $ext = $6;
+        my ($ret, $valid_ext) = &validate_extension($ext);
+        if ( !$ret ) {
+          printf "Invalid extension in line %d: %s\n", $idx, $valid_ext;
+          print "$line\n";
+        }
+        $cur_store{"extension"} = $valid_ext;
+
+        # ステートの更新
+        $is_read_extension = 1;
+        $is_read_env_vars = 0;
       }
       elsif ( $2 eq "env_vars" ) {
-        print "!!ENV_VARS\n";
+        printf "Invalid syntax in line %d: 'env_vars' must not have value.\n", $idx;
+        print "$line\n";
       }
       else {
-        print "invalid syntax.\n";
+        # 環境変数
+        if ( $is_read_extension ) {
+          printf "Invalid syntax in line %d: 'extension' must not have leaves.\n", $idx;
+          print "$line\n";
+        }
+
+        if ( ! $is_read_env_vars ) {
+          printf "Invalid syntax in line %d: unknown syntax (no 'env_vars:' but environment variable seems starting).\n", $idx;
+          print "$line\n";
+        }
+
+        if ( ! &check_snd_indent($indent) ) {
+          printf "Indent error in line %d.\n", $idx;
+          print "$line\n";
+        }
+
+        if ( exists($cur_env_vars{$2}) ) {
+          printf "Invalid syntax in line %d: you can't set same variable twice to one file.\n", $idx;
+          print "$line\n";
+        }
+
+        $cur_env_vars{$2} = $6;
       }
     }
-    elsif ( $line =~ m|^(\s*)([\w/.\-]+)(\s*)(:)(\s*)(\R)$| ) {
+    elsif ( $line =~ m|^(\s*)([\w/\.\-]+)(\s*)(:)(\s*)(\R)$| ) {
       # パターン 2
-      # print "    key = $2\n";
 
       my $indent = length $1;
 
@@ -282,7 +338,10 @@ sub validate_filename {
             # 2つ目以降のファイル設定の開始
 
             # 今までのファイル設定をストア
-            $replaced{$cur_filename} = %cur_store;
+            my %env_vars_buf = %cur_env_vars;
+            $cur_store{"env_vars"} = \%env_vars_buf;
+            my %store_buf = %cur_store;
+            $replaced{$cur_filename} = \%store_buf;
 
             # バッファのリセット
             $is_read_extension = 0;
@@ -291,6 +350,7 @@ sub validate_filename {
             $snd_indent = 0;
             $cur_filename = $2;
             %cur_store = ();
+            %cur_env_vars = ();
           }
         }
         elsif ( $indent > 0 ) {
@@ -311,6 +371,69 @@ sub validate_filename {
 
   }
 
+  sub dump_replaced {
+    foreach my $key (keys %replaced) {
+      print "$key\n";
+    }
+
+    print (Dumper %replaced);
+  }
+
+  sub write_breath {
+    foreach my $fname (keys %replaced) {
+      #print "$fname\n";
+      #print (Dumper $replaced{$fname});
+      my $new_fname;
+      if ( $fname =~ m|^([\w/\.\-]+)(.breath)$| ) {
+        if ( exists($replaced{$fname}{"extension"}) ) {
+          $new_fname = $1 . $replaced{$fname}{"extension"};
+          print "$new_fname\n";
+        }
+        else {
+          $new_fname = $1;
+          print "$new_fname\n";
+        }
+      }
+      else {
+        if ( exists($replaced{$fname}{"extension"}) ) {
+          $new_fname = $fname . $replaced{$fname}{"extension"};
+          print "$new_fname\n";
+        }
+        else {
+          print "Error : cannot determine new file name.\n";
+        }
+      }
+
+      my @buffer = ();
+      if ( exists($replaced{$fname}{"env_vars"}) ) {
+        my $file;
+        open($file, $fname);
+        my @content = <$file>;
+        close($file);
+
+        foreach my $line (@content) {
+          #print $line;
+          while ( $line =~ m|(\{\{\{)(.+?)(\}\}\})|g ) {
+            #print $2;
+            if ( exists($replaced{$fname}{"env_vars"}{$2}) ) {
+              # ここでもしも $replaced{$fname}{"env_vars"}{$2} が {{{ hoge }}} みたいな文字列だと
+              # 無限ループになるので breath.yml の読み込みアルゴリズムとの整合性に注意すること。
+              $line = $` . $replaced{$fname}{"env_vars"}{$2} . $';
+            }
+          }
+          #print "-> $line";
+          push(@buffer, $line);
+        }
+      }
+
+      my $new_file;
+      open($new_file, "> $new_fname");
+      print $new_file @buffer;
+      close($new_file);
+    }
+    
+  }
+
   sub write_mode {
     print "write mode is selected.\n";
 
@@ -322,8 +445,13 @@ sub validate_filename {
 
     &parse_breath_yml;
 
-    print %replaced;
-    print "\n";
+    #print %replaced;
+    #print "\n";
+
+    &dump_replaced;
+
+    print "---------------------\n";
+    &write_breath;
   }
 }
 
