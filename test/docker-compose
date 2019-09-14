@@ -1,0 +1,9 @@
+version: "3"
+
+service:
+  lego:
+    image: xenolf/lego
+    command: >
+      --webroot {{{WEBROOT}}}
+      --test {{{VAR1}}} {{{VAR2}}} {{{VAR3}}}
+      run

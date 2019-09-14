@@ -1,0 +1,9 @@
+version: "3"
+
+service:
+  lego:
+    image: xenolf/lego
+    command: >
+      --webroot /hoge/fuga
+      --test ./var1/varvar /var2:var3 /ext
+      run
