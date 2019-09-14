@@ -4,5 +4,5 @@ install: breath.pl
 	cat breath.pl >> /usr/local/bin/breath
 	chmod +x /usr/local/bin/breath	
 
-uninstall: breath
+uninstall: /usr/local/bin/breath
 	rm /usr/local/bin/breath
