@@ -446,7 +446,6 @@ sub validate_filename {
         foreach my $line (@content) {
           #print $line;
           while ( $line =~ m|(\{\{\{)(.+?)(\}\}\})|g ) {
-            print "seek", $2. "\n";
             if ( exists($replaced{$fname}{"env_vars"}{$2}) ) {
               # ここでもしも $replaced{$fname}{"env_vars"}{$2} が {{{ hoge }}} みたいな文字列だと
               # 無限ループになるので breath.yml の読み込みアルゴリズムとの整合性に注意すること。
