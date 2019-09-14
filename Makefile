@@ -1,8 +1,8 @@
 
 install: breath.pl
-	echo '#''!'`which perl` > breath
-	cat breath.pl >> breath
-	chmod +x breath	
+	echo '#''!'`which perl` > /usr/local/bin/breath
+	cat breath.pl >> /usr/local/bin/breath
+	chmod +x /usr/local/bin/breath	
 
 uninstall: breath
-	rm breath
+	rm /usr/local/bin/breath

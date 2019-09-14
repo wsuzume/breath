@@ -29,6 +29,11 @@ else {
 sub read_mode {
   print "read mode is selected.\n";
 
+  if ( -e "breath.yml" ) {
+    print "Error: breath.yml already exists.\n";
+    exit(1);
+  }
+
   #find( \&print_file_name, "./" );
   #find( { wanted => \&print_breath_file, no_chdir => 1 }, "./" );
   find( { wanted => \&read_breath_file, no_chdir => 1 }, "./" );
@@ -112,6 +117,9 @@ sub validate_filename {
   # 設定ファイルを読み込んだときに格納しておくバッファ
   my @lines;
 
+  # 書き込みを許可できないエラーが発生した
+  my $error_occured;
+
   # 置換した結果を格納しておくバッファ
   my %replaced;
 
@@ -128,6 +136,7 @@ sub validate_filename {
 
     if ( $indent == 0 ) {
       # 1stインデントが来るべきところにインデントがないのでエラー
+      $error_occured = 1;
       return 0;
     }
 
@@ -137,42 +146,47 @@ sub validate_filename {
     }
     elsif ( $fst_indent != $indent ) {
       # 登録されているインデントと違うのでエラー
+      $error_occured = 1;
       return 0;
     }
 
     if ( $snd_indent != 0 and $fst_indent <= $snd_indent ) {
       # 2ndインデントが既に読み取り済みで
       # 1stインデントが2ndインデントより深いか同じなのはエラー
+      $error_occured = 1;
       return 0;
     }
 
     return 1;
   }
 
-   sub check_snd_indent {
-     my $indent = $_[0];
+  sub check_snd_indent {
+    my $indent = $_[0];
 
-     if ( $fst_indent == 0 ) {
-       # 1stインデントよりも先に2ndインデントが来るのはエラー
-       return 0;
-     }
+    if ( $fst_indent == 0 ) {
+      # 1stインデントよりも先に2ndインデントが来るのはエラー
+      $error_occured = 1;
+      return 0;
+    }
 
-     if ( $snd_indent == 0 ) {
-       # 初回なので登録
-       $snd_indent = $indent;
-     }
-     elsif ( $snd_indent != $indent ) {
-       # 登録されているインデントと違うのでエラー
-       return 0;
-     }
+    if ( $snd_indent == 0 ) {
+      # 初回なので登録
+      $snd_indent = $indent;
+    }
+    elsif ( $snd_indent != $indent ) {
+      # 登録されているインデントと違うのでエラー
+      $error_occured = 1;
+      return 0;
+    }
 
-     if ( $snd_indent <= $fst_indent ) {
-       # 2ndインデントが1stインデントよりも浅いか同じなのでエラー
-       return 0;
-     }
-     
-     return 1;
-   }
+    if ( $snd_indent <= $fst_indent ) {
+      # 2ndインデントが1stインデントよりも浅いか同じなのでエラー
+      $error_occured = 1;
+      return 0;
+    }
+
+    return 1;
+  }
 
 
   # filename を読んだ時点で 1 。これが 1 のときに EOF か次の filename を読むと次のファイル。
@@ -196,6 +210,8 @@ sub validate_filename {
 
   sub parse_breath_yml {
     %replaced = ();
+
+    $error_occured = 0;
 
     $is_read_filename = 0;
     $is_read_extension = 0;
@@ -254,11 +270,13 @@ sub validate_filename {
 
       if ( $2 eq "extension" ) {
         if ( $is_read_extension ) {
+          $error_occured = 1;
           printf "Invalid syntax in line %d: 'extension:' detected twice in one file.\n", $idx;
           print "$line\n";
         }
 
         if ( ! &check_fst_indent($indent) ) {
+          $error_occured = 1;
           printf "Indent error in line %d.\n", $idx;
           print "$line\n";
         }
@@ -266,6 +284,7 @@ sub validate_filename {
         my $ext = $6;
         my ($ret, $valid_ext) = &validate_extension($ext);
         if ( !$ret ) {
+          $error_occured = 1;
           printf "Invalid extension in line %d: %s\n", $idx, $valid_ext;
           print "$line\n";
         }
@@ -276,27 +295,32 @@ sub validate_filename {
         $is_read_env_vars = 0;
       }
       elsif ( $2 eq "env_vars" ) {
+        $error_occured = 1;
         printf "Invalid syntax in line %d: 'env_vars' must not have value.\n", $idx;
         print "$line\n";
       }
       else {
         # 環境変数
         if ( $is_read_extension ) {
+          $error_occured = 1;
           printf "Invalid syntax in line %d: 'extension' must not have leaves.\n", $idx;
           print "$line\n";
         }
 
         if ( ! $is_read_env_vars ) {
+          $error_occured = 1;
           printf "Invalid syntax in line %d: unknown syntax (no 'env_vars:' but environment variable seems starting).\n", $idx;
           print "$line\n";
         }
 
         if ( ! &check_snd_indent($indent) ) {
+          $error_occured = 1;
           printf "Indent error in line %d.\n", $idx;
           print "$line\n";
         }
 
         if ( exists($cur_env_vars{$2}) ) {
+          $error_occured = 1;
           printf "Invalid syntax in line %d: you can't set same variable twice to one file.\n", $idx;
           print "$line\n";
         }
@@ -310,11 +334,13 @@ sub validate_filename {
       my $indent = length $1;
 
       if ( $2 eq "extension" ) {
+        $error_occured = 1;
         printf "Invalid syntax in line %d: extension must have value.\n", $idx;
         print "$line\n";
       }
       elsif ( $2 eq "env_vars" ) {
         if ( !check_fst_indent($indent) ) {
+          $error_occured = 1;
           printf "Indent error in line %d.\n", $idx;
           print "$line\n";
         }
@@ -328,6 +354,7 @@ sub validate_filename {
             # もっとも最初に到達すべき分岐
             #print "MAYBE filename!!\n";
             if ( exists($replaced{$2}) ) {
+              $error_occured = 1;
               printf "Invalid syntax in line %d: you can't set variables twice to one file.\n", $idx;
               print "$line\n";
             }
@@ -354,6 +381,7 @@ sub validate_filename {
           }
         }
         elsif ( $indent > 0 ) {
+          $error_occured = 1;
           printf "Invalid syntax in line %d: environment variable must have value.\n", $idx;
           print "$line\n";
         }
@@ -365,6 +393,7 @@ sub validate_filename {
       return;
     }
     else {
+      $error_occured = 1;
       printf "Invalid syntax in line %d: unknown syntax.\n", $idx;
       print "$line\n";
     }
@@ -400,6 +429,7 @@ sub validate_filename {
           print "$new_fname\n";
         }
         else {
+          $error_occured = 1;
           print "Error : cannot determine new file name.\n";
         }
       }
@@ -444,6 +474,11 @@ sub validate_filename {
     close($file);
 
     &parse_breath_yml;
+
+    if ( $error_occured ) {
+      print "Error: parse failed.\n";
+      exit(1);
+    }
 
     #print %replaced;
     #print "\n";
