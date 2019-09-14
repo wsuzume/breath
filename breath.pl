@@ -86,7 +86,7 @@ sub read_mode {
 
       push(@whole_env, "$fname:\n");
       push(@whole_env, "  extension:\n");
-      push(@whole_env, "  env_vars: \n");
+      push(@whole_env, "  env_vars:\n");
       foreach my $key (sort {$env_vars{$a} <=> $env_vars{$b}} keys %env_vars) {
         #print $key, "\n";
         #print "    $key:$env_vars{$key}\n";
@@ -261,10 +261,11 @@ sub validate_filename {
       return;
     }
 
-    #print $line;
-    if ( $line =~ m|^(\s*)(\w+)(\s*)(:)(\s*)([\w:/.]+)(\s*)(\R)$| ) {
+    print $line;
+    if ( $line =~ m|^(\s*)(\w+)(\s*)(:)(\s*)([\S]+)(\s*)(\R)$| ) {
       # パターン 1
       # 拡張子または環境変数
+      print "pattern 1\n";
 
       my $indent = length $1;
 
@@ -300,6 +301,7 @@ sub validate_filename {
         print "$line\n";
       }
       else {
+        print "here\n";
         # 環境変数
         if ( $is_read_extension ) {
           $error_occured = 1;
@@ -325,11 +327,13 @@ sub validate_filename {
           print "$line\n";
         }
 
+        print "HERE!!!!\n";
         $cur_env_vars{$2} = $6;
       }
     }
     elsif ( $line =~ m|^(\s*)([\w/\.\-]+)(\s*)(:)(\s*)(\R)$| ) {
       # パターン 2
+      print "pattern 2\n";
 
       my $indent = length $1;
 
@@ -444,7 +448,7 @@ sub validate_filename {
         foreach my $line (@content) {
           #print $line;
           while ( $line =~ m|(\{\{\{)(.+?)(\}\}\})|g ) {
-            #print $2;
+            print "seek", $2. "\n";
             if ( exists($replaced{$fname}{"env_vars"}{$2}) ) {
               # ここでもしも $replaced{$fname}{"env_vars"}{$2} が {{{ hoge }}} みたいな文字列だと
               # 無限ループになるので breath.yml の読み込みアルゴリズムとの整合性に注意すること。
