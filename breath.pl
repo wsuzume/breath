@@ -265,7 +265,7 @@ sub validate_filename {
     if ( $line =~ m|^(\s*)(\w+)(\s*)(:)(\s*)([\S]+)(\s*)(\R)$| ) {
       # パターン 1
       # 拡張子または環境変数
-      print "pattern 1\n";
+      #print "pattern 1\n";
 
       my $indent = length $1;
 
@@ -301,7 +301,6 @@ sub validate_filename {
         print "$line\n";
       }
       else {
-        print "here\n";
         # 環境変数
         if ( $is_read_extension ) {
           $error_occured = 1;
@@ -327,13 +326,12 @@ sub validate_filename {
           print "$line\n";
         }
 
-        print "HERE!!!!\n";
         $cur_env_vars{$2} = $6;
       }
     }
     elsif ( $line =~ m|^(\s*)([\w/\.\-]+)(\s*)(:)(\s*)(\R)$| ) {
       # パターン 2
-      print "pattern 2\n";
+      #print "pattern 2\n";
 
       my $indent = length $1;
 
