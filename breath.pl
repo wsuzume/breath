@@ -486,7 +486,8 @@ sub validate_filename {
 
     &dump_replaced;
 
-    print "---------------------\n";
+    print "---------------------------------------\n";
+    print "[generated]\n";
     &write_breath;
   }
 }
