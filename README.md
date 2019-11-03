@@ -1,13 +1,13 @@
-# breath
-System configuration manager written in pure perl5.
+# retriever
+System configuration manager written in Python3.6.
 
-`breath` is a single-file pure perl5 program so can be used without poluting environment.
+`retriever` is a single-file pure perl5 program so can be used without poluting environment.
 
 ## Install
 ```make install```
 
 ## Usage
-`breath` is a simple template engine. Just write your configuration file as below: example `docker-compose.yml` as `docker-compose.breath`.
+`retriever` is a simple template engine. Just write your configuration file as below: example `docker-compose.yml` as `docker-compose.rtvr`.
 
 ```
 version "3"
@@ -22,17 +22,17 @@ services:
       - {{{PORT}}}
 ```
 
-When you execute `breath read`, it produces `breath.yml` from all `*.breath` files in your current working directory as below.
+When you execute `retriever read`, it produces `retriever.yml` from all `*.rtvr` files in your current working directory as below.
 
 ```
-./docker-compose.breath:
+./docker-compose.rtvr:
   extension:
   env_vars:
     ROOT_DIRECTORY:
     CERT_FILES_DIRECTORY:
     PORT:
 
-./other/breath_file.breath:
+./other/breath_file.trvr:
   extension:
   env_vars:
     AAA:
@@ -43,14 +43,14 @@ When you execute `breath read`, it produces `breath.yml` from all `*.breath` fil
 Then, write configuration.
 
 ```
-./docker-compose.breath:
+./docker-compose.rtvr:
   extension: .yml
   env_vars:
     ROOT_DIRECTORY: ./nginx/html:/usr/share/nginx/html
     CERT_FILES_DIRECTORY: ./certs:/pki/tls
     PORT: "80:80"
 
-./other/breath_file.breath:
+./other/breath_file.rtvr:
   extension:
   env_vars:
     AAA:
@@ -58,19 +58,19 @@ Then, write configuration.
 
 ```
 
-And just execute `breath write` will replace all variables.
+And just execute `retriever write` will replace all variables.
 
 ### Note
 You can't use `:` in variable's name.
 
-Blank variable is prohibitted. You should set all variables to run `breath write`.
+Blank variable is prohibitted. You should set all variables to run `retriever write`.
 
-`breath` replaces each `*.breath` file's extension with the extension you write in `extension:`. For example, `extension: .yml` for `docker-compose.breath` results in `docker-compose.yml`.
+`retriever` replaces each `*.rtvr` file's extension with the extension you write in `extension:`. For example, `extension: .yml` for `docker-compose.rtvr` results in `docker-compose.yml`.
 
-If you forget `.`, it's OK. For example, `extension: yml` for `docker-compose.breath` also results in `docker-compose.yml`. And if you don't need any extension, just delete `extension:` like below.
+If you forget `.`, it's OK. For example, `extension: yml` for `docker-compose.rtvr` also results in `docker-compose.yml`. And if you don't need any extension, just delete `extension:` like below.
 
 ```
-./other/breath_file.breath:
+./other/breath_file.rtvr:
   env_vars:
     AAA:
     BBB:
