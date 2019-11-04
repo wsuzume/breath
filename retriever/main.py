@@ -1,10 +1,18 @@
 
 import argparse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2.exceptions import TemplateNotFound
 import os
+import pathlib
 import sys
 import yaml
 
+CONFIG_DIR_NAME = '.retriever_config'
+
+class ManagedDirectory:
+    def __init__(self, path):
+        self.path = path
+        self.files = []
 
 def get_accessible_upstream(abspath):
     upstream = []
@@ -31,7 +39,22 @@ def split_all_exts(path):
     return exts
 
 def is_retriever_file(path, ext='.rtvr'):
-    return ext in path
+    return ext in split_all_exts(path)
+
+def get_retriever_targets(root_path):
+    root_dir = ManagedDirectory(root_path)
+    cur_managed_dir = [root_dir]
+    stack = []
+    for root, directory, files in os.walk(root_dir.path):
+        #print(root, directory, files)
+        if os.path.commonprefix([root, cur_managed_dir[0].path]) != cur_managed_dir[0].path:
+            #print('here', root, cur_managed_dir[0], os.path.commonprefix([root, cur_managed_dir[0]]))
+            stack.append(cur_managed_dir.pop(0))
+        if CONFIG_DIR_NAME in directory and root != cur_managed_dir[0].path:
+            cur_managed_dir.insert(0, ManagedDirectory(root))
+        for filename in list(filter(is_retriever_file, files)):
+            cur_managed_dir[0].files.append(os.path.join(root, filename))
+    return sorted(stack + cur_managed_dir, key=lambda x: x.path)
 
 def yes_no_input(msg):
     print(msg + ' [y/N]: ', end='')
@@ -51,9 +74,25 @@ class Retriever:
     def __init__(self, args):
         self.args = args
 
+    def get_env(self, path):
+        return Environment(
+                    variable_start_string='{{{',
+                    variable_end_string='}}}',
+                    loader=FileSystemLoader(
+                            searchpath=path,
+                            encoding='utf-8',
+                            followlinks=False
+                            ),
+                    autoescape=select_autoescape(
+                                enabled_extensions=(),
+                                disabled_extensions=()
+                                )
+                    )
+
+
     def get_config_location(self, abspath):
         upstream = get_accessible_upstream(abspath)
-        return first_appears_in(upstream, '.retriever_config', f=os.path.isdir)
+        return first_appears_in(upstream, CONFIG_DIR_NAME, f=os.path.isdir)
 
     def check_config(self, loc, abspath):
         if loc is None:
@@ -74,7 +113,7 @@ class Retriever:
         loc = self.get_config_location(abspath)
         self.check_config(loc, abspath)
 
-        config_path = os.path.join(abspath, '.retriever_config')
+        config_path = os.path.join(abspath, CONFIG_DIR_NAME)
 
         try:
             os.mkdir(config_path)
@@ -92,24 +131,33 @@ class Retriever:
                 }, default_flow_style=False))
 
     def read(self):
-        env = Environment(
-                loader=FileSystemLoader(
-                    searchpath='.',
-                    encoding='utf-8',
-                    followlinks=False
-                    ),
-                autoescape=select_autoescape(
-                    enabled_extensions=(),
-                    disabled_extensions=()
-                    )
-                )
+        abspath = os.path.abspath(os.getcwd())
 
-        print(is_retriever_file('hoge.fuga.piyo.rtvr.poyo'))
-        print(is_retriever_file('hoge.fuga.piyo.ika.poyo'))
+        loc = self.get_config_location(abspath)
+        os.chdir(loc[0])
+        print('Running on \'' + loc[0] + '\'')
+        cwd = os.path.abspath(os.getcwd())
+        self.env = self.get_env(cwd)
 
-        with os.scandir('../test') as target:
-            for entry in target:
-                print(entry.path)
+        targets = get_retriever_targets(cwd)
+
+        p_cwd = pathlib.Path(cwd)
+
+        target_dict = {}
+        for target in targets:
+            buf = {}
+            for f in target.files:
+                buf[f] = 0
+                try:
+                    p_f = pathlib.Path(f)
+                    tmpl = self.env.get_template(str(p_f.relative_to(p_cwd)))
+                    print("Template found!!")
+                except TemplateNotFound:
+                    print("Template not found!!")
+            target_dict[target.path] = buf
+        print(yaml.dump(target_dict, default_flow_style=False))
+
+
 
     def write(self):
         pass
