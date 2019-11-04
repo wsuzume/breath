@@ -1,6 +1,6 @@
 
 import argparse
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape, meta
 from jinja2.exceptions import TemplateNotFound
 import os
 import pathlib
@@ -138,22 +138,25 @@ class Retriever:
         print('Running on \'' + loc[0] + '\'')
         cwd = os.path.abspath(os.getcwd())
         self.env = self.get_env(cwd)
+        p_cwd = pathlib.Path(cwd)
 
         targets = get_retriever_targets(cwd)
-
-        p_cwd = pathlib.Path(cwd)
 
         target_dict = {}
         for target in targets:
             buf = {}
             for f in target.files:
-                buf[f] = 0
                 try:
                     p_f = pathlib.Path(f)
-                    tmpl = self.env.get_template(str(p_f.relative_to(p_cwd)))
-                    print("Template found!!")
+                    source = self.env.loader.get_source(self.env, str(p_f.relative_to(p_cwd)))
+                    parsed_content = self.env.parse(source)
+                    variables = meta.find_undeclared_variables(parsed_content)
+                    keys = {}
+                    for key in variables:
+                        keys[key] = None
+                    buf[f] = keys
                 except TemplateNotFound:
-                    print("Template not found!!")
+                    pass
             target_dict[target.path] = buf
         print(yaml.dump(target_dict, default_flow_style=False))
 
